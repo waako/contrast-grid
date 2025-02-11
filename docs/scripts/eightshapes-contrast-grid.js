@@ -356,7 +356,8 @@ EightShapes.ColorForm = (function () {
   }
 
   function updateUrl() {
-    window.history.pushState(false, false, "/?" + $colorForm.serialize());
+    const url = window.location.origin + window.location.pathname + "?" + $colorForm.serialize();
+    window.history.pushState(false, false, url);
   }
 
   // function disableFormFields() {
