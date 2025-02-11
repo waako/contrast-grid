@@ -122,6 +122,7 @@ module.exports = function (grunt) {
           "node_modules/js-beautify/js/lib/beautify-html.js",
           "node_modules/js-beautify/js/lib/beautify-css.js",
           "node_modules/svg4everybody/dist/svg4everybody.min.js",
+          "node_modules/chroma-js/dist/chroma.min.cjs",
           "src/scripts/dragtable.js",
         ],
         flatten: true,

@@ -1,13 +1,21 @@
 var EightShapes = EightShapes || {};
-
 EightShapes.ColorForm = (function () {
   "use strict";
+
   var $colorForm,
     $foregroundColorsInput,
     $backgroundColorsInput,
     foregroundColors,
     backgroundColors,
-    hexRegex = /^(#?[A-Fa-f0-9]{6}|#?[A-Fa-f0-9]{3})(,.*)?/gim;
+    colorRegex = /(#?[A-Fa-f0-9]{3,8}|rgb(a?)\((.*?)\)|hsl\((.*?)\)|hwb\((.*?)\))/gim;
+
+  function parseColorToHex(color) {
+    try {
+      return chroma(color).hex().toUpperCase();
+    } catch (e) {
+      return null;
+    }
+  }
 
   function processColorInput($input) {
     var value = $input.val(),
@@ -15,31 +23,66 @@ EightShapes.ColorForm = (function () {
       hexValues = [],
       colors = [];
 
-    while ((m = hexRegex.exec(value)) !== null) {
-      if (m.index === hexRegex.lastIndex) {
-        hexRegex.lastIndex++;
+    while ((m = colorRegex.exec(value)) !== null) {
+      if (m.index === colorRegex.lastIndex) {
+        colorRegex.lastIndex++;
       }
 
-      var hex = m[1],
-        label = m[2],
+      var color = m[0],
+        label = m[1],
         colorData = { hex: false };
 
-      if (hex.indexOf("#") !== 0) {
-        hex = "#" + hex;
-      }
-
-      colorData.hex = hex.toUpperCase();
-
-      if (typeof label !== "undefined") {
-        label = label.slice(1).trim(); //Remove the leading comma matched in the regex and any leading or trailing whitespace
-        if (label.length > 0) {
-          colorData.label = label;
+      var hex = parseColorToHex(color);
+      if (hex) {
+        colorData.hex = hex;
+        if (typeof label !== "undefined") {
+          label = label.slice(1).trim();
+          if (label.length > 0) {
+            colorData.label = label;
+          }
+        }
+        if (!hexValues.includes(hex)) {
+          hexValues.push(hex);
+          colors.push(colorData);
         }
       }
+    }
 
-      if (hexValues.indexOf(hex) === -1) {
-        hexValues.push(hex);
-        colors.push(colorData);
+    if ($input.attr("id") === "es-color-form__foreground-colors") {
+      foregroundColors = colors;
+    } else if ($input.attr("id") === "es-color-form__background-colors") {
+      backgroundColors = colors;
+    }
+  }
+
+  function processColorInput($input) {
+    var value = $input.val(),
+      m,
+      hexValues = [],
+      colors = [];
+
+    while ((m = colorRegex.exec(value)) !== null) {
+      if (m.index === colorRegex.lastIndex) {
+        colorRegex.lastIndex++;
+      }
+
+      var color = m[0],
+        label = m[1],
+        colorData = { hex: false };
+
+      var hex = parseColorToHex(color);
+      if (hex) {
+        colorData.hex = hex;
+        if (typeof label !== "undefined") {
+          label = label.slice(1).trim();
+          if (label.length > 0) {
+            colorData.label = label;
+          }
+        }
+        if (hexValues.indexOf(hex) === -1) {
+          hexValues.push(hex);
+          colors.push(colorData);
+        }
       }
     }
 
