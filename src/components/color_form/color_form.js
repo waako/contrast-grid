@@ -17,71 +17,65 @@ EightShapes.ColorForm = (function () {
    * - Named colors (`red`, `blue`, `gold`, etc.)
    * - Supports an optional comma-separated label: `color, label`
    */
-  var colorRegex = /(
-        #?[A-Fa-f0-9]{3,8}                      # Hex color (#RGB, #RRGGBB, #RRGGBBAA)
-      | rgb(a?)\(\s*([\d.%]+\s*[, ]\s*[\d.%]+\s*[, ]\s*[\d.%]+(?:\s*[, ]\s*[\d.%]+)?)\s*\)  # RGB(A), supports spaces & commas
-      | hsl(a?)\(\s*([\d.%]+\s*[, ]\s*[\d.%]+\s*[, ]\s*[\d.%]+(?:\s*[, ]\s*[\d.%]+)?)\s*\)  # HSL(A), supports spaces & commas
-      | hwb\(\s*([\d.%]+\s*[, ]\s*[\d.%]+\s*[, ]\s*[\d.%]+)\s*\)                          # HWB, supports commas & spaces
-      | \b[a-zA-Z]+\b(?!\()                         # Named colors (e.g., "red", "blue", "gold")
-    )/gimx;
+  var colorRegex = /(#?[A-Fa-f0-9]{3,8}|rgb(a?)\(\s*([\d.%]+\s*[, ]\s*[\d.%]+\s*[, ]\s*[\d.%]+(?:\s*[, ]\s*[\d.%]+)?)\s*\)|hsl(a?)\(\s*([\d.%]+\s*[, ]\s*[\d.%]+\s*[, ]\s*[\d.%]+(?:\s*[, ]\s*[\d.%]+)?)\s*\)|hwb\(\s*([\d.%]+\s*[, ]\s*[\d.%]+\s*[, ]\s*[\d.%]+)\s*\)|\b[a-zA-Z]+\b(?!\())/gim;
 
   /**
-   * Converts various color formats into a standardized representation.
-   * - Returns HEX for fully opaque colors.
-   * - Returns RGBA for semi-transparent RGB colors.
-   * - Returns HSLA for semi-transparent HSL colors.
+   * Parses a color string and returns it in the appropriate format.
+   * Retains the original format where possible (HEX, RGB(A), HSL(A)).
    *
-   * @param {string} color - The color string in any supported format.
-   * @returns {string|null} - A valid color representation (HEX, RGBA, HSLA) or null if invalid.
+   * @param {string} color - The color input string.
+   * @returns {string|null} - The parsed color string in the correct format, or null if invalid.
    */
   function parseColor(color) {
     try {
-      let parsedColor = chroma(color);
-      let alpha = parsedColor.alpha();
+      let parsedColor = chroma(color); // Parse using Chroma.js
+      let alpha = parsedColor.alpha(); // Extract alpha transparency
 
-      if (alpha === 1) {
-        return parsedColor.hex().toUpperCase(); // Return HEX for opaque colors
+      // Preserve the original format where possible
+      if (color.startsWith("rgb")) {
+        let rgba = parsedColor.rgba();
+        return `rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${alpha.toFixed(2)})`;
+      } else if (color.startsWith("hsl") || color.includes("turn")) {
+        let hsl = parsedColor.hsl();
+        return `hsla(${Math.round(hsl[0])}, ${Math.round(hsl[1] * 100)}%, ${Math.round(hsl[2] * 100)}%, ${alpha.toFixed(2)})`;
       } else {
-        if (color.startsWith("hsl") || color.includes("turn")) {
-          let hsl = parsedColor.hsl();
-          return `hsla(${Math.round(hsl[0])},${Math.round(hsl[1] * 100)}%,${Math.round(hsl[2] * 100)}%,${alpha.toFixed(2)})`;
-        } else {
-          let rgba = parsedColor.rgba();
-          return `rgba(${rgba[0]},${rgba[1]},${rgba[2]},${alpha.toFixed(2)})`;
-        }
+        return parsedColor.hex().toUpperCase(); // Default to HEX for other cases
       }
     } catch (e) {
-      return null;
+      return null; // Return null for invalid colors
     }
   }
 
   /**
-   * Processes user input from the color form, extracting valid color values,
-   * converting them to HEX/RGBA/HSLA, and storing optional labels.
+   * Processes a multiline color input from a textarea.
+   * Extracts colors and optional labels, ensuring correct formatting.
    *
-   * @param {jQuery} $input - The jQuery object for the input field being processed.
+   * @param {string} textareaValue - The raw input text from the textarea.
+   * @returns {Array<Object>} - An array of color objects with optional labels.
    */
-  function processColorInput($input) {
-    var value = $input.val(),
-      m,
-      colorValues = [],
-      colors = [];
+  function processColorInput(textareaValue) {
+    var colorValues = [],
+    colors = [];
 
-    while ((m = colorRegex.exec(value)) !== null) {
-      if (m.index === colorRegex.lastIndex) {
-        colorRegex.lastIndex++;
-      }
+    // Split input into individual lines
+    var lines = textareaValue.split(/\r?\n/);
+
+    lines.forEach(function (line) {
+      var trimmedLine = line.trim();
+      if (!trimmedLine) return; // Skip empty lines
+
+      var m = trimmedLine.match(colorRegex);
+      if (!m) return; // Skip invalid lines
 
       var colorEntry = m[0].trim();
       var label = "";
 
-      // Check if color entry contains a label (format: "color, label")
-      var lastCommaIndex = colorEntry.lastIndexOf(",");
+      // Extract optional label (comma-separated)
+      var lastCommaIndex = line.lastIndexOf(",");
       if (lastCommaIndex !== -1) {
-        let potentialColor = colorEntry.substring(0, lastCommaIndex).trim();
-        let potentialLabel = colorEntry.substring(lastCommaIndex + 1).trim();
+        let potentialColor = line.substring(0, lastCommaIndex).trim();
+        let potentialLabel = line.substring(lastCommaIndex + 1).trim();
 
-        // Verify if potentialColor is actually a valid color
         if (parseColor(potentialColor)) {
           colorEntry = potentialColor;
           label = potentialLabel;
@@ -92,7 +86,7 @@ EightShapes.ColorForm = (function () {
       if (colorOutput) {
         var colorData = { color: colorOutput };
         if (label.length > 0) {
-          colorData.label = label; // Preserve user-defined labels
+          colorData.label = label;
         }
 
         if (!colorValues.includes(colorOutput)) {
@@ -100,13 +94,10 @@ EightShapes.ColorForm = (function () {
           colors.push(colorData);
         }
       }
-    }
+    });
 
-    if ($input.attr("id") === "es-color-form__foreground-colors") {
-      foregroundColors = colors;
-    } else if ($input.attr("id") === "es-color-form__background-colors") {
-      backgroundColors = colors;
-    }
+    console.log("Processed Colors:", colors); // 🔥 DEBUG: Print parsed colors & labels
+    return colors;
   }
 
   function updateInputText(inputName, text) {
@@ -135,12 +126,12 @@ EightShapes.ColorForm = (function () {
 
   var removeColor = function removeColor(e, hex, colorset) {
     colorset =
-      colorset === "background" && backgroundColors.length === 0
-        ? "foreground"
-        : colorset;
+    colorset === "background" && backgroundColors.length === 0
+    ? "foreground"
+    : colorset;
     var colors =
-        colorset === "background" ? backgroundColors : foregroundColors,
-      gridDataText = "";
+    colorset === "background" ? backgroundColors : foregroundColors,
+    gridDataText = "";
     colors = removeColorFromData(hex, colors);
     gridDataText = convertGridDataToText(colors);
     updateInputText(colorset, gridDataText);
@@ -168,7 +159,7 @@ EightShapes.ColorForm = (function () {
 
   function sortForegroundColors(e, sortedColorsKey) {
     var sortedForegroundColors = [],
-      gridDataText = "";
+    gridDataText = "";
     sortedColorsKey.forEach(function (hexKey) {
       foregroundColors.forEach(function (colorData) {
         if (colorData.hex === hexKey) {
@@ -183,9 +174,9 @@ EightShapes.ColorForm = (function () {
 
   function sortBackgroundColors(e, sortedColorsKey) {
     var sortedBackgroundColors = [],
-      gridDataText = "",
-      inputField = "",
-      startingColorData;
+    gridDataText = "",
+    inputField = "",
+    startingColorData;
 
     if (backgroundColors.length > 0) {
       inputField = "background";
@@ -212,7 +203,7 @@ EightShapes.ColorForm = (function () {
       e.preventDefault();
     }
     var $backgroundColors = $("#es-color-form__background-colors"),
-      $foregroundColors = $("#es-color-form__foreground-colors");
+    $foregroundColors = $("#es-color-form__foreground-colors");
     if (
       $(".es-color-form").hasClass(
         "es-color-form--show-background-colors-input"
@@ -250,8 +241,8 @@ EightShapes.ColorForm = (function () {
 
   function broadcastTileSizeChange(e) {
     var tileSize = $colorForm
-      .find("input[name='es-color-form__tile-size']:checked")
-      .val();
+    .find("input[name='es-color-form__tile-size']:checked")
+    .val();
     $(document).trigger("escg.tileSizeChanged", [tileSize]);
     updateUrl();
   }
