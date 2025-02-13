@@ -6,9 +6,32 @@ EightShapes.ColorForm = (function () {
     $foregroundColorsInput,
     $backgroundColorsInput,
     foregroundColors,
-    backgroundColors,
-    colorRegex = /(#?[A-Fa-f0-9]{3,8}|rgb(a?)\((.*?)\)|hsl\((.*?)\)|hwb\((.*?)\))/gim;
+    backgroundColors;
 
+  /**
+   * Regular expression to capture various color formats:
+   * - Hexadecimal (#RGB, #RRGGBB, #RRGGBBAA)
+   * - RGB and RGBA (`rgb(r g b)`, `rgb(r, g, b)`, `rgba(r g b a)`, `rgba(r, g, b, a)`)
+   * - HSL (`hsl(h s% l%)`, `hsl(h, s%, l%)`)
+   * - HWB (`hwb(h w% b%)`, `hwb(h, w%, b%)`)
+   * - Named colors (`red`, `blue`, `darkgoldenrod`, etc.)
+   * - Supports an optional custom label in the format: `color, label`
+   */
+  var colorRegex = /(#?[A-Fa-f0-9]{3,8}                  # Hex color (#RGB, #RRGGBB, #RRGGBBAA)
+                    |rgb(a?)\(\s*([\d\s,%.]+)\s*\)       # RGB/RGBA (supports space & comma separators)
+                    |hsl\(\s*([\d\s,%.]+)\s*\)           # HSL (supports space & comma separators)
+                    |hwb\(\s*([\d\s,%.]+)\s*\)           # HWB (supports space & comma separators)
+                    |\b[a-zA-Z]+\b(?!\()                 # Named colors (e.g., "red", "blue", "gold")
+                   )/gimx;                               // Flags: g (global), i (case-insensitive), m (multiline), x (extended for readability)
+
+
+  /**
+   * Converts various color formats into a standardized HEX representation.
+   * Uses Chroma.js for reliable color parsing.
+   *
+   * @param {string} color - The color string in any supported format.
+   * @returns {string|null} - The corresponding HEX color code or null if invalid.
+   */
   function parseColorToHex(color) {
     try {
       return chroma(color).hex().toUpperCase();
@@ -17,6 +40,12 @@ EightShapes.ColorForm = (function () {
     }
   }
 
+  /**
+   * Processes user input from the color form, extracting valid color values,
+   * converting them to HEX, and storing optional labels.
+   *
+   * @param {jQuery} $input - The jQuery object for the input field being processed.
+   */
   function processColorInput($input) {
     var value = $input.val(),
       m,
@@ -28,19 +57,23 @@ EightShapes.ColorForm = (function () {
         colorRegex.lastIndex++;
       }
 
-      var color = m[0],
-        label = m[1],
-        colorData = { hex: false };
+      var colorEntry = m[0].trim();
+      var label = "";
 
-      var hex = parseColorToHex(color);
+      // Check if color entry contains a label (format: "color, label")
+      if (colorEntry.includes(",")) {
+        let parts = colorEntry.split(",").map(s => s.trim());
+        colorEntry = parts[0]; // Extract the actual color value
+        label = parts.slice(1).join(", "); // Handle multiple commas in label
+      }
+
+      var hex = parseColorToHex(colorEntry);
       if (hex) {
-        colorData.hex = hex;
-        if (typeof label !== "undefined") {
-          label = label.slice(1).trim();
-          if (label.length > 0) {
-            colorData.label = label;
-          }
+        var colorData = { hex: hex };
+        if (label.length > 0) {
+          colorData.label = label; // Preserve user-defined labels
         }
+
         if (!hexValues.includes(hex)) {
           hexValues.push(hex);
           colors.push(colorData);
@@ -51,44 +84,6 @@ EightShapes.ColorForm = (function () {
     if ($input.attr("id") === "es-color-form__foreground-colors") {
       foregroundColors = colors;
     } else if ($input.attr("id") === "es-color-form__background-colors") {
-      backgroundColors = colors;
-    }
-  }
-
-  function processColorInput($input) {
-    var value = $input.val(),
-      m,
-      hexValues = [],
-      colors = [];
-
-    while ((m = colorRegex.exec(value)) !== null) {
-      if (m.index === colorRegex.lastIndex) {
-        colorRegex.lastIndex++;
-      }
-
-      var color = m[0],
-        label = m[1],
-        colorData = { hex: false };
-
-      var hex = parseColorToHex(color);
-      if (hex) {
-        colorData.hex = hex;
-        if (typeof label !== "undefined") {
-          label = label.slice(1).trim();
-          if (label.length > 0) {
-            colorData.label = label;
-          }
-        }
-        if (hexValues.indexOf(hex) === -1) {
-          hexValues.push(hex);
-          colors.push(colorData);
-        }
-      }
-    }
-
-    if ($input.attr("id") == "es-color-form__foreground-colors") {
-      foregroundColors = colors;
-    } else if ($input.attr("id") == "es-color-form__background-colors") {
       backgroundColors = colors;
     }
   }
