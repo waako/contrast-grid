@@ -9,32 +9,47 @@ EightShapes.ColorForm = (function () {
     backgroundColors;
 
   /**
-   * Regular expression to capture various color formats:
+   * Regular expression to match valid color formats:
    * - Hexadecimal (#RGB, #RRGGBB, #RRGGBBAA)
-   * - RGB and RGBA (`rgb(r g b)`, `rgb(r, g, b)`, `rgba(r g b a)`, `rgba(r, g, b, a)`)
-   * - HSL (`hsl(h s% l%)`, `hsl(h, s%, l%)`)
-   * - HWB (`hwb(h w% b%)`, `hwb(h, w%, b%)`)
-   * - Named colors (`red`, `blue`, `darkgoldenrod`, etc.)
-   * - Supports an optional custom label in the format: `color, label`
+   * - RGB(A) (`rgb(r, g, b)`, `rgb(r g b)`, `rgba(r, g, b, a)`, `rgba(r g b a)`)
+   * - HSL(A) (`hsl(h, s%, l%)`, `hsl(h s% l%)`, `hsla(h, s%, l%, a)`)
+   * - HWB (`hwb(h, w%, b%)`, `hwb(h w% b%)`)
+   * - Named colors (`red`, `blue`, `gold`, etc.)
+   * - Supports an optional comma-separated label: `color, label`
    */
-  var colorRegex = /(#?[A-Fa-f0-9]{3,8}                  # Hex color (#RGB, #RRGGBB, #RRGGBBAA)
-                    |rgb(a?)\(\s*([\d\s,%.]+)\s*\)       # RGB/RGBA (supports space & comma separators)
-                    |hsl\(\s*([\d\s,%.]+)\s*\)           # HSL (supports space & comma separators)
-                    |hwb\(\s*([\d\s,%.]+)\s*\)           # HWB (supports space & comma separators)
-                    |\b[a-zA-Z]+\b(?!\()                 # Named colors (e.g., "red", "blue", "gold")
-                   )/gimx;                               // Flags: g (global), i (case-insensitive), m (multiline), x (extended for readability)
-
+  var colorRegex = /(
+        #?[A-Fa-f0-9]{3,8}                      # Hex color (#RGB, #RRGGBB, #RRGGBBAA)
+      | rgb(a?)\(\s*([\d.%]+\s*[, ]\s*[\d.%]+\s*[, ]\s*[\d.%]+(?:\s*[, ]\s*[\d.%]+)?)\s*\)  # RGB(A), supports spaces & commas
+      | hsl(a?)\(\s*([\d.%]+\s*[, ]\s*[\d.%]+\s*[, ]\s*[\d.%]+(?:\s*[, ]\s*[\d.%]+)?)\s*\)  # HSL(A), supports spaces & commas
+      | hwb\(\s*([\d.%]+\s*[, ]\s*[\d.%]+\s*[, ]\s*[\d.%]+)\s*\)                          # HWB, supports commas & spaces
+      | \b[a-zA-Z]+\b(?!\()                         # Named colors (e.g., "red", "blue", "gold")
+    )/gimx;
 
   /**
-   * Converts various color formats into a standardized HEX representation.
-   * Uses Chroma.js for reliable color parsing.
+   * Converts various color formats into a standardized representation.
+   * - Returns HEX for fully opaque colors.
+   * - Returns RGBA for semi-transparent RGB colors.
+   * - Returns HSLA for semi-transparent HSL colors.
    *
    * @param {string} color - The color string in any supported format.
-   * @returns {string|null} - The corresponding HEX color code or null if invalid.
+   * @returns {string|null} - A valid color representation (HEX, RGBA, HSLA) or null if invalid.
    */
-  function parseColorToHex(color) {
+  function parseColor(color) {
     try {
-      return chroma(color).hex().toUpperCase();
+      let parsedColor = chroma(color);
+      let alpha = parsedColor.alpha();
+
+      if (alpha === 1) {
+        return parsedColor.hex().toUpperCase(); // Return HEX for opaque colors
+      } else {
+        if (color.startsWith("hsl") || color.includes("turn")) {
+          let hsl = parsedColor.hsl();
+          return `hsla(${Math.round(hsl[0])},${Math.round(hsl[1] * 100)}%,${Math.round(hsl[2] * 100)}%,${alpha.toFixed(2)})`;
+        } else {
+          let rgba = parsedColor.rgba();
+          return `rgba(${rgba[0]},${rgba[1]},${rgba[2]},${alpha.toFixed(2)})`;
+        }
+      }
     } catch (e) {
       return null;
     }
@@ -42,14 +57,14 @@ EightShapes.ColorForm = (function () {
 
   /**
    * Processes user input from the color form, extracting valid color values,
-   * converting them to HEX, and storing optional labels.
+   * converting them to HEX/RGBA/HSLA, and storing optional labels.
    *
    * @param {jQuery} $input - The jQuery object for the input field being processed.
    */
   function processColorInput($input) {
     var value = $input.val(),
       m,
-      hexValues = [],
+      colorValues = [],
       colors = [];
 
     while ((m = colorRegex.exec(value)) !== null) {
@@ -61,21 +76,27 @@ EightShapes.ColorForm = (function () {
       var label = "";
 
       // Check if color entry contains a label (format: "color, label")
-      if (colorEntry.includes(",")) {
-        let parts = colorEntry.split(",").map(s => s.trim());
-        colorEntry = parts[0]; // Extract the actual color value
-        label = parts.slice(1).join(", "); // Handle multiple commas in label
+      var lastCommaIndex = colorEntry.lastIndexOf(",");
+      if (lastCommaIndex !== -1) {
+        let potentialColor = colorEntry.substring(0, lastCommaIndex).trim();
+        let potentialLabel = colorEntry.substring(lastCommaIndex + 1).trim();
+
+        // Verify if potentialColor is actually a valid color
+        if (parseColor(potentialColor)) {
+          colorEntry = potentialColor;
+          label = potentialLabel;
+        }
       }
 
-      var hex = parseColorToHex(colorEntry);
-      if (hex) {
-        var colorData = { hex: hex };
+      var colorOutput = parseColor(colorEntry);
+      if (colorOutput) {
+        var colorData = { color: colorOutput };
         if (label.length > 0) {
           colorData.label = label; // Preserve user-defined labels
         }
 
-        if (!hexValues.includes(hex)) {
-          hexValues.push(hex);
+        if (!colorValues.includes(colorOutput)) {
+          colorValues.push(colorOutput);
           colors.push(colorData);
         }
       }
